@@ -2,3 +2,5 @@ target/
 .idea/
 .claude/
 scripts/
+node_modules/
+*.log
