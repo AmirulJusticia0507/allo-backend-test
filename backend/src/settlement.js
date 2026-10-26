@@ -131,7 +131,7 @@ export function settleOptimized(balances) {
       transactions.push({
         from: d.id,
         to: c.id,
-        amount: pay.toDecimalPlaces(2).toString(),
+        amount: pay.toDecimalPlaces(2).toFixed(2),
       });
     }
 
@@ -157,20 +157,31 @@ export function buildSettlement(group, expenses, serviceChargePct) {
   );
 
   const serviceChargeAmount = totalExpenses
-    .times(new Decimal(serviceChargePct).div(100));
+    .times(new Decimal(serviceChargePct).div(100))
+    .toDecimalPlaces(2);
+
+  // Always two decimal places so clients get a stable money format.
+  const money = (value) => value.toDecimalPlaces(2).toFixed(2);
 
   const perParticipant = group.participants.map((p) => ({
     id: p.id,
     name: p.name,
-    balance: balances.get(p.id).toDecimalPlaces(2).toString(),
+    balance: money(balances.get(p.id)),
   }));
+
+  const totalExpensesRounded = money(totalExpenses);
 
   return {
     groupId: group.id,
     groupName: group.name,
-    totalExpenses: totalExpenses.toDecimalPlaces(2).toString(),
+    totalExpenses: totalExpensesRounded,
+    // Required by the brief: snake_case, both fields, every settlement response.
+    service_charge_pct: serviceChargePct,
+    service_charge_amount: money(serviceChargeAmount),
+    // Kept for backwards compatibility with the existing frontend.
     serviceChargePct,
-    serviceChargeAmount: serviceChargeAmount.toDecimalPlaces(2).toString(),
+    serviceChargeAmount: money(serviceChargeAmount),
+    total_with_service_charge: money(totalExpenses.plus(serviceChargeAmount)),
     perParticipant,
     transactions,
   };

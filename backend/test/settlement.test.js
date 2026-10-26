@@ -8,7 +8,7 @@ import {
   settleOptimized,
   buildSettlement,
 } from '../src/settlement.js';
-import { computeServiceChargePct, serviceChargeForExpenses } from '../src/config.js';
+import { computeServiceChargePct, serviceChargeForExpenses, GITHUB_USERNAME } from '../src/config.js';
 
 // Helper to make a group
 const makeGroup = () => ({
@@ -112,6 +112,14 @@ test('service charge pct computed from username, not hardcoded', () => {
   assert.equal(computeServiceChargePct('AlloBankDev'), 5);
 });
 
+test('service charge pct is derived from the submission GitHub username', () => {
+  // Sum of the lowercase code points of 'amiruljusticia0507' = 1714 → 1714 % 10 = 4.
+  let sum = 0;
+  for (const ch of 'amiruljusticia0507') sum += ch.charCodeAt(0);
+  assert.equal(computeServiceChargePct(GITHUB_USERNAME), sum % 10);
+  assert.equal(computeServiceChargePct(GITHUB_USERNAME), 4);
+});
+
 test('service charge amount is pct of total expenses', () => {
   const pct = computeServiceChargePct('allobankdev'); // 5
   const amount = serviceChargeForExpenses(pct, new Decimal('200.00'));
@@ -124,8 +132,13 @@ test('buildSettlement returns required personalization fields', () => {
     { amount: '100.00', paidBy: 'a', for: ['a', 'b', 'c'], strategy: SplitStrategy.EQUAL },
   ];
   const settlement = buildSettlement(group, expenses, 5);
+  // The brief requires these exact snake_case keys on every settlement response.
+  assert.equal(settlement.service_charge_pct, 5);
+  assert.equal(settlement.service_charge_amount, '5.00'); // 5% of 100 = 5
+  assert.equal(settlement.total_with_service_charge, '105.00');
+  // CamelCase kept for the existing frontend.
   assert.equal(settlement.serviceChargePct, 5);
-  assert.equal(settlement.serviceChargeAmount, '5'); // 5% of 100 = 5
+  assert.equal(settlement.serviceChargeAmount, '5.00');
   assert.ok(Array.isArray(settlement.transactions));
   assert.ok(settlement.totalExpenses);
 });

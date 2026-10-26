@@ -27,6 +27,36 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 4110;
 
+// Reject anything `new Decimal()` would throw on, so bad input is a 400 not a 500.
+function isNumericString (value) {
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value !== 'string' || value.trim() === '') return false;
+  return Number.isFinite(Number(value));
+}
+
+/**
+ * `shares` are only meaningful for PERCENT and EXACT. Silently accepting shares
+ * that do not add up produces meaningless balances, so reject them instead.
+ * Returns an error message, or null when the payload is valid.
+ */
+function validateShares (strategy, shares, beneficiaries, amount) {
+  if (strategy !== SplitStrategy.PERCENT && strategy !== SplitStrategy.EXACT) return null;
+
+  const values = Object.values(shares);
+  if (values.length === 0) return `shares are required for ${strategy} expenses`;
+  if (!values.every(isNumericString)) return 'shares must be numeric values';
+
+  let total = new Decimal(0);
+  for (const value of values) total = total.plus(new Decimal(value));
+
+  if (strategy === SplitStrategy.PERCENT) {
+    return total.equals(100) ? null : 'shares must total 100 for PERCENT expenses';
+  }
+
+  const expected = new Decimal(amount);
+  return total.equals(expected) ? null : 'shares must total the expense amount for EXACT expenses';
+}
+
 // ── Root (welcome + endpoint index) ────────────────────────────────────────────
 app.get('/', (_req, res) => {
   res.json({
@@ -83,6 +113,9 @@ app.post('/api/groups/:id/expenses', (req, res) => {
   if (amount == null || !paidBy) {
     return res.status(400).json({ error: 'amount and paidBy are required' });
   }
+  if (!Decimal.isDecimal(amount) && !isNumericString(amount)) {
+    return res.status(400).json({ error: 'amount must be a numeric value' });
+  }
   if (new Decimal(amount).lte(0)) {
     return res.status(400).json({ error: 'amount must be positive' });
   }
@@ -97,11 +130,15 @@ app.post('/api/groups/:id/expenses', (req, res) => {
     }
   }
 
+  const splitStrategy = strategy || SplitStrategy.EQUAL;
+  const shareError = validateShares(splitStrategy, shares || {}, beneficiaries, amount);
+  if (shareError) return res.status(400).json({ error: shareError });
+
   const record = addExpense(req.params.id, {
     amount: String(amount),
     paidBy,
     for: beneficiaries,
-    strategy: strategy || SplitStrategy.EQUAL,
+    strategy: splitStrategy,
     shares: shares || {},
     category: category || 'general',
     description: description || '',

@@ -5,7 +5,7 @@ import Decimal from 'decimal.js';
 // pct = (sum of lowercase ASCII values of the username) % 10   → 0..9 (%)
 // amount = pct applied to the total group expenses.
 // Computed in code, never hardcoded.
-export const GITHUB_USERNAME = 'allobankdev';
+export const GITHUB_USERNAME = 'AmirulJusticia0507';
 
 export function computeServiceChargePct(username = GITHUB_USERNAME) {
   const lower = username.toLowerCase();
